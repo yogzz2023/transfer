@@ -1,0 +1,486 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <curl/curl.h>
+
+#define MAX_BUF_SIZE 1024
+
+int main()
+{
+    CURL *curl;
+    CURLcode res;
+    char source_path[MAX_BUF_SIZE], dest_path[MAX_BUF_SIZE], url[MAX_BUF_SIZE];
+    char username[MAX_BUF_SIZE], password[MAX_BUF_SIZE], host[MAX_BUF_SIZE];
+    FILE *fp;
+
+    // Get the source file path
+    printf("Enter the source file path: ");
+    scanf("%s", source_path);
+
+    // Get the destination file path
+    printf("Enter the destination file path: ");
+    scanf("%s", dest_path);
+
+    // Get the username, password and hostname of the destination system
+    printf("Enter the username of the destination system: ");
+    scanf("%s", username);
+    printf("Enter the password of the destination system: ");
+    scanf("%s", password);
+    printf("Enter the hostname of the destination system: ");
+    scanf("%s", host);
+
+    // Build the URL to transfer the file
+    sprintf(url, "sftp://%s:%s@%s/%s", username, password, host, dest_path);
+
+    // Initialize curl
+    curl = curl_easy_init();
+    if (curl)
+    {
+        // Set the URL to transfer the file
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+
+        // Set the source file path
+        curl_easy_setopt(curl, CURLOPT_READDATA, fp);
+
+        // Set the transfer mode to upload
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+
+        // Set the source file to read from
+        fp = fopen(source_path, "rb");
+        if (!fp)
+        {
+            printf("Error: Unable to open the source file!\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Perform the file transfer
+        res = curl_easy_perform(curl);
+
+        // Check for errors
+        if (res != CURLE_OK)
+        {
+            printf("Error: Unable to transfer the file! Error code: %d\n", res);
+            exit(EXIT_FAILURE);
+        }
+
+        // Clean up
+        fclose(fp);
+        curl_easy_cleanup(curl);
+
+        printf("File transfer completed successfully!\n");
+    }
+
+    return 0;
+}
+
+
+------
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/inotify.h>
+#include <unistd.h>
+#include <curl/curl.h>
+
+#define EVENT_SIZE  (sizeof (struct inotify_event))
+#define MAX_EVENTS 1024
+#define BUF_LEN     (MAX_EVENTS * (EVENT_SIZE + 16))
+
+#define MAX_BUF_SIZE 1024
+
+int transfer_file(char *source_path, char *dest_path, char *username, char *password, char *host)
+{
+   CURL *curl;
+   CURLcode res;
+   FILE *fp;
+
+   // Initialize the curl session
+   curl = curl_easy_init();
+   if(curl)
+   {
+      // Set the username and password for the remote system
+      curl_easy_setopt(curl, CURLOPT_USERNAME, username);
+      curl_easy_setopt(curl, CURLOPT_PASSWORD, password);
+
+      // Set the remote file path
+      char url[MAX_BUF_SIZE];
+      sprintf(url, "sftp://%s%s", host, dest_path);
+      curl_easy_setopt(curl, CURLOPT_URL, url);
+
+      // Set the local file path
+      fp = fopen(source_path, "rb");
+      if (!fp)
+      {
+         printf("Error: Unable to open the source file!\n");
+         curl_easy_cleanup(curl);
+         return -1;
+      }
+      curl_easy_setopt(curl, CURLOPT_READDATA, fp);
+
+      // Perform the transfer
+      res = curl_easy_perform(curl);
+
+      // Cleanup the curl session and close the file
+      curl_easy_cleanup(curl);
+      fclose(fp);
+
+      if (res != CURLE_OK)
+      {
+         printf("Error: Unable to transfer the file! Error code: %d\n", res);
+         return -1;
+      }
+
+      printf("File transfer completed successfully!\n");
+   }
+
+   return 0;
+}
+
+int main()
+{
+   int fd, wd, length, i;
+   char buffer[BUF_LEN];
+   char source_dir[MAX_BUF_SIZE], dest_dir[MAX_BUF_SIZE], username[MAX_BUF_SIZE], password[MAX_BUF_SIZE], host[MAX_BUF_SIZE];
+
+   // Get the source directory path
+   printf("Enter the source directory path: ");
+   scanf("%s", source_dir);
+
+   // Get the destination directory path
+   printf("Enter the destination directory path: ");
+   scanf("%s", dest_dir);
+
+   // Get the username, password and hostname of the destination system
+   printf("Enter the username of the destination system: ");
+   scanf("%s", username);
+   printf("Enter the password of the destination system: ");
+   scanf("%s", password);
+   printf("Enter the hostname of the destination system: ");
+   scanf("%s", host);
+
+   // Initialize the inotify instance and watch the source directory for new files
+   fd = inotify_init();
+   if (fd < 0)
+   {
+      perror("Error: Unable to initialize inotify!");
+      exit(EXIT_FAILURE);
+   }
+   wd = inotify_add_watch(fd, source_dir, IN_CREATE);
+   if (wd < 0)
+   {
+      perror("Error: Unable to add watch for the source directory!");
+      exit(EXIT_FAILURE);
+   }
+
+   // Wait for new files in the source directory and transfer them to the destination directory
+   while (1)
+   {
+      i = 0;
+      length = read(fd, buffer, BUF_LEN);
+      if (length <0)
+{
+perror("Error: Unable to read events from inotify!");
+exit(EXIT_FAILURE);
+}
+
+while (i < length)
+{
+struct inotify_event *event = (struct inotify_event *)&buffer[i];
+if (event->mask & IN_CREATE)
+{
+if (!(event->mask & IN_ISDIR))
+{
+char source_path[MAX_BUF_SIZE], dest_path[MAX_BUF_SIZE];
+sprintf(source_path, "%s/%s", source_dir, event->name);
+sprintf(dest_path, "%s/%s", dest_dir, event->name);
+printf("New file detected: %s\n", source_path);
+if (transfer_file(source_path, dest_path, username, password, host) == 0)
+{
+printf("File transfer successful: %s\n", source_path);
+}
+else
+{
+printf("Error: Unable to transfer the file: %s\n", source_path);
+}
+}
+}
+i += EVENT_SIZE + event->len;
+}
+}
+
+// Cleanup the inotify instance
+inotify_rm_watch(fd, wd);
+close(fd);
+
+return 0;
+}
+--------
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/inotify.h>
+#include <curl/curl.h>
+
+#define MAX_BUF_SIZE 1024
+#define EVENT_SIZE (sizeof(struct inotify_event))
+#define EVENT_BUF_LEN (1024 * (EVENT_SIZE + 16))
+
+int transfer_file(const char *source, const char *dest, const char *username, const char *password, const char *host)
+{
+   CURL *curl;
+   CURLcode res;
+   struct curl_slist *headerlist = NULL;
+   char error[CURL_ERROR_SIZE] = {0};
+
+   curl_global_init(CURL_GLOBAL_ALL);
+
+   curl = curl_easy_init();
+   if (curl)
+   {
+      char url[MAX_BUF_SIZE];
+      sprintf(url, "scp://%s%s", host, dest);
+      curl_easy_setopt(curl, CURLOPT_URL, url);
+      curl_easy_setopt(curl, CURLOPT_USERNAME, username);
+      curl_easy_setopt(curl, CURLOPT_PASSWORD, password);
+      curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+      curl_easy_setopt(curl, CURLOPT_READDATA, fopen(source, "rb"));
+      curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
+      headerlist = curl_slist_append(headerlist, "Transfer-Encoding:");
+      curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
+
+      res = curl_easy_perform(curl);
+
+      if (res != CURLE_OK)
+      {
+         printf("Error: Unable to transfer the file: %s\n", error);
+         curl_easy_cleanup(curl);
+         curl_slist_free_all(headerlist);
+         return 1;
+      }
+
+      curl_easy_cleanup(curl);
+      curl_slist_free_all(headerlist);
+   }
+
+   curl_global_cleanup();
+   return 0;
+}
+
+int main()
+{
+   const char *source_dir = "/path/to/source/directory";
+   const char *dest_dir = "/path/to/destination/directory";
+   const char *username = "remote_username";
+   const char *password = "remote_password";
+   const char *host = "remote_host_ip";
+
+   int fd = inotify_init();
+   if (fd < 0)
+   {
+      perror("Error: Unable to initialize inotify!");
+      exit(EXIT_FAILURE);
+   }
+
+   int wd = inotify_add_watch(fd, source_dir, IN_CREATE);
+   if (wd < 0)
+   {
+      perror("Error: Unable to add watch to inotify!");
+      exit(EXIT_FAILURE);
+   }
+
+   char buffer[EVENT_BUF_LEN];
+   while (1)
+   {
+      int i = 0;
+      int length = read(fd, buffer, EVENT_BUF_LEN);
+      if (length < 0)
+      {
+         perror("Error: Unable to read events from inotify!");
+         exit(EXIT_FAILURE);
+      }
+
+      while (i < length)
+      {
+         struct inotify_event *event = (struct inotify_event *)&buffer[i];
+         if (event->mask & IN_CREATE)
+         {
+            if (!(event->mask & IN_ISDIR))
+            {
+               char source_path[MAX_BUF_SIZE], dest_path[MAX_BUF_SIZE];
+               sprintf(source_path, "%s/%s", source_dir, event->name);
+               sprintf(dest_path, "%s/%s", dest_dir, event->name);
+               printf("New file detected: %s\n", source_path);
+               if (transfer_file(source_path, dest_path, username, password, host) == 0)
+               {
+                  printf("File transfer successful: %s\n", source_path);
+               }
+               else
+               {
+                  printf("Error: Unable to transfer the file:%s\n", source_path);
+}
+}
+}
+i += EVENT_SIZE + event->len;
+}
+}
+
+inotify_rm_watch(fd, wd);
+close(fd);
+
+return 0;
+}
+
+-------
+We need libssh2 library for it 
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+
+#define BUFSIZE 1024
+
+int main() {
+    /* Remote system information */
+    const char *remote_ip = "<remote_ip_address>";
+    const char *remote_username = "<remote_username>";
+    const char *remote_password = "<remote_password>";
+    const char *remote_path = "<remote_path>";
+
+    /* Local directory path */
+    const char *local_path = "<local_path>";
+
+    /* Resolve remote IP address */
+    struct hostent *he;
+    if ((he = gethostbyname(remote_ip)) == NULL) {
+        fprintf(stderr, "Failed to resolve IP address: %s\n", remote_ip);
+        return 1;
+    }
+    char remote_ip_addr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, he->h_addr_list[0], remote_ip_addr, INET_ADDRSTRLEN);
+
+    /* Create socket */
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Failed to create socket");
+        return 1;
+    }
+
+    /* Connect to remote system */
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(22);
+    inet_pton(AF_INET, remote_ip_addr, &serv_addr.sin_addr);
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("Failed to connect to remote system");
+        return 1;
+    }
+
+    /* Perform SSH handshake */
+    char buf[BUFSIZE];
+    ssize_t bytes_read, bytes_written;
+    bytes_read = read(sockfd, buf, BUFSIZE);
+    if (bytes_read < 0) {
+        perror("Failed to read from socket");
+        return 1;
+    }
+    bytes_written = write(sockfd, "SSH-2.0-libssh2_1.8.0\n", strlen("SSH-2.0-libssh2_1.8.0\n"));
+    if (bytes_written < 0) {
+        perror("Failed to write to socket");
+        return 1;
+    }
+
+    /* Authenticate to remote system */
+    int fd = open("/dev/null", O_WRONLY);
+    LIBSSH2_SESSION *session = libssh2_session_init();
+    if (session == NULL) {
+        fprintf(stderr, "Failed to create SSH session.\n");
+        close(sockfd);
+        return 1;
+    }
+    libssh2_session_handshake(session, sockfd);
+    libssh2_userauth_password(session, remote_username, remote_password);
+    libssh2_session_set_blocking(session, 1);
+
+    /* Open SFTP session */
+    LIBSSH2_SFTP *sftp = libssh2_sftp_init(session);
+    if (sftp == NULL) {
+        fprintf(stderr, "Failed to create SFTP session.\n");
+        libssh2_session_disconnect(session, "Client disconnecting");
+        libssh2_session_free(session);
+        close(sockfd);
+        return 1;
+    }
+
+    /* Transfer files */
+    DIR *dir = opendir(local_path);
+    if (dir != NULL) {
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
+            if (ent->d_type == DT_REG) {
+            char local_file_path[PATH_MAX];
+            char remote_file_path[PATH_MAX];
+            snprintf(local_file_path, PATH_MAX, "%s/%s", local_path, ent->d_name);
+            snprintf(remote_file_path, PATH_MAX, "%s/%s", remote_path, ent->d_name);
+
+            LIBSSH2_SFTP_HANDLE *handle = libssh2_sftp_open(sftp, remote_file_path, LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC, LIBSSH2_SFTP_S_IRWXU);
+            if (handle == NULL) {
+                fprintf(stderr, "Failed to open remote file: %s\n", remote_file_path);
+                continue;
+            }
+
+            int local_fd = open(local_file_path, O_RDONLY);
+            if (local_fd < 0) {
+                perror("Failed to open local file");
+                libssh2_sftp_close(handle);
+                continue;
+            }
+
+            char buffer[BUFSIZE];
+            ssize_t nread;
+            while ((nread = read(local_fd, buffer, BUFSIZE)) > 0) {
+                ssize_t nwrite = libssh2_sftp_write(handle, buffer, nread);
+                if (nwrite < 0) {
+                    fprintf(stderr, "Failed to write to remote file: %s\n", remote_file_path);
+                    close(local_fd);
+                    libssh2_sftp_close(handle);
+                    continue;
+                }
+            }
+
+            close(local_fd);
+            libssh2_sftp_close(handle);
+            printf("Transferred file: %s\n", local_file_path);
+        }
+    }
+
+    closedir(dir);
+} else {
+    fprintf(stderr, "Failed to open local directory: %s\n", local_path);
+    libssh2_sftp_shutdown(sftp);
+    libssh2_session_disconnect(session, "Client disconnecting");
+    libssh2_session_free(session);
+    close(sockfd);
+    return 1;
+}
+
+/* Cleanup */
+libssh2_sftp_shutdown(sftp);
+libssh2_session_disconnect(session, "Client disconnecting");
+libssh2_session_free(session);
+close(sockfd);
+
+return 0;
+}
+
