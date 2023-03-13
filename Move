@@ -1,0 +1,196 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+int move_file(const char* old_path, const char* new_path) {
+    FILE* old_file = fopen(old_path, "rb");
+    if (old_file == NULL) {
+        perror("Error opening source file");
+        return 1;
+    }
+
+    FILE* new_file = fopen(new_path, "wb");
+    if (new_file == NULL) {
+        perror("Error opening destination file");
+        fclose(old_file);
+        return 1;
+    }
+
+    int c;
+    while ((c = fgetc(old_file)) != EOF) {
+        fputc(c, new_file);
+    }
+
+    fclose(old_file);
+    fclose(new_file);
+
+    if (remove(old_path) != 0) {
+        perror("Error deleting source file");
+        return 1;
+    }
+
+    printf("File %s successfully moved to %s.\n", old_path, new_path);
+    return 0;
+}
+
+int main() {
+    const char* old_path = "/path/to/old/file.txt";
+    const char* new_path = "/path/to/new/file.txt";
+
+    int result = move_file(old_path, new_path);
+    return result;
+}
+
+----
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int move_file(const char* old_path, const char* new_path) {
+    // Open the source file for reading
+    FILE* old_file = fopen(old_path, "rb");
+    if (old_file == NULL) {
+        perror("Error opening source file");
+        return 1;
+    }
+
+    // Open the destination file for writing
+    FILE* new_file = fopen(new_path, "wb");
+    if (new_file == NULL) {
+        perror("Error opening destination file");
+        fclose(old_file);
+        return 1;
+    }
+
+    // Read from the source file and write to the destination file
+    char buffer[BUFSIZ];
+    size_t n;
+    while ((n = fread(buffer, 1, sizeof(buffer), old_file)) > 0) {
+        if (fwrite(buffer, 1, n, new_file) != n) {
+            perror("Error writing to destination file");
+            fclose(old_file);
+            fclose(new_file);
+            return 1;
+        }
+    }
+
+    // Close the source and destination files
+    fclose(old_file);
+    fclose(new_file);
+
+    // Delete the original file
+    if (remove(old_path) != 0) {
+        perror("Error deleting source file");
+        return 1;
+    }
+
+    printf("File %s successfully moved to %s.\n", old_path, new_path);
+    return 0;
+}
+
+int main() {
+    const char* old_path = "/path/to/old/file.txt";
+    const char* new_path = "/path/to/new/file.txt";
+
+    int result = move_file(old_path, new_path);
+    return result;
+}
+
+
+----
+here's the code for a move_file() module that you can include in your C program:
+
+c
+Copy code
+/* move_file.h */
+#ifndef MOVE_FILE_H
+#define MOVE_FILE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int move_file(const char* old_path, const char* new_path);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MOVE_FILE_H */
+
+/* move_file.c */
+#include "move_file.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int move_file(const char* old_path, const char* new_path) {
+    // Open the source file for reading
+    FILE* old_file = fopen(old_path, "rb");
+    if (old_file == NULL) {
+        perror("Error opening source file");
+        return 1;
+    }
+
+    // Open the destination file for writing
+    FILE* new_file = fopen(new_path, "wb");
+    if (new_file == NULL) {
+        perror("Error opening destination file");
+        fclose(old_file);
+        return 1;
+    }
+
+    // Read from the source file and write to the destination file
+    char buffer[BUFSIZ];
+    size_t n;
+    while ((n = fread(buffer, 1, sizeof(buffer), old_file)) > 0) {
+        if (fwrite(buffer, 1, n, new_file) != n) {
+            perror("Error writing to destination file");
+            fclose(old_file);
+            fclose(new_file);
+            return 1;
+        }
+    }
+
+    // Close the source and destination files
+    fclose(old_file);
+    fclose(new_file);
+
+    // Delete the original file
+    if (remove(old_path) != 0) {
+        perror("Error deleting source file");
+        return 1;
+    }
+
+    printf("File %s successfully moved to %s.\n", old_path, new_path);
+    return 0;
+}
+To use this module in your C program, simply include the move_file.h header file and link against the move_file.c implementation file. For example, your program might look something like this:
+
+c
+Copy code
+/* main.c */
+#include "move_file.h"
+#include <stdio.h>
+
+int main() {
+    const char* old_path = "/path/to/old/file.txt";
+    const char* new_path = "/path/to/new/file.txt";
+
+    int result = move_file(old_path, new_path);
+    if (result == 0) {
+        printf("File moved successfully.\n");
+    } else {
+        printf("File move failed.\n");
+    }
+
+    return 0;
+}
+When you compile your program, you'll need to include the move_file.c file in your build command. For example:
+
+css
+Copy code
+gcc main.c move_file.c -o my_program
+
+
+
+
+
