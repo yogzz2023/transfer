@@ -1,0 +1,130 @@
+If you're getting the "Automatic pubkey failed" error message and the SSH client prompts you to try a specific key, it means that the SSH client is unable to automatically find and use the correct public key for authentication. Here's what you can do to solve this error:
+
+Check that the public key is located in the correct directory on the SSH client machine. By default, SSH clients look for public keys in the ~/.ssh directory. Make sure that the public key you're trying to use is located in that directory.
+
+Check that the public key has been added to the authorized_keys file on the SSH server machine. The authorized_keys file contains a list of public keys that are allowed to access the SSH server. If the public key is not in this file, the SSH server will reject the authentication attempt. You can add the public key to the authorized_keys file by copying the contents of the public key file (e.g., id_rsa.pub) and pasting it into the authorized_keys file (located in the ~/.ssh directory) on the SSH server.
+
+If the public key is located in a non-standard location on the SSH client machine, you can specify the path to the public key using the -i option. For example:
+
+css
+Copy code
+ssh -i /path/to/public/key user@host
+If none of the above steps work, you can try specifying a specific public key using the -o option. For example:
+typescript
+Copy code
+ssh -o IdentityFile=/path/to/public/key user@host
+This will tell the SSH client to use the specified public key for authentication.
+
+If you're still unable to authenticate using the public key, you can check the SSH server logs to see if there are any errors or messages that can help diagnose the issue. The logs are typically located in the /var/log/auth.log file on the SSH server machine.
+I hope these steps help you resolve the "Automatic pubkey failed" error and successfully authenticate using your public key.
+
+
+
+If you are receiving the "Automatic pubkey failed" error message in SSH and it prompts you with "Do you want to try a specific key?" then it means that your SSH client is unable to find a suitable private key for authentication.
+
+To resolve this error, you can try the following steps:
+
+Make sure that you have the correct private key for the SSH connection you are trying to make. Check that the private key is located in the correct directory and has the correct file permissions. You can check the location of the key by looking at the SSH configuration file on the client machine.
+
+If you have multiple private keys in your SSH client, you can try specifying a specific private key using the -i option. For example:
+
+css
+Copy code
+ssh -i /path/to/private_key user@host
+If you are still having trouble authenticating, you can try increasing the verbosity level of the SSH client to get more information about the authentication process. You can do this by adding the -v option to the SSH command. For example:
+sql
+Copy code
+ssh -v user@host
+This will print out detailed information about the SSH connection and authentication process, which can help you identify the issue.
+
+If none of the above steps work, you can try resetting the SSH client's key cache. This can be done by deleting the contents of the ~/.ssh/known_hosts file on the client machine.
+
+
+
+ssh_session session;
+ssh_key key;
+int rc;
+
+// create a new SSH session
+session = ssh_new();
+if (session == NULL) {
+    // error handling
+}
+
+// set the hostname and port number
+ssh_options_set(session, SSH_OPTIONS_HOST, "example.com");
+ssh_options_set(session, SSH_OPTIONS_PORT, &port);
+
+// connect to the server
+rc = ssh_connect(session);
+if (rc != SSH_OK) {
+    // error handling
+}
+
+// load the private key
+rc = ssh_pki_import_privkey_file("/path/to/private/key", NULL, NULL, NULL, &key);
+if (rc != SSH_OK) {
+    // error handling
+}
+
+// authenticate with the server using the public key
+rc = ssh_userauth_publickey_auto(session, NULL, key);
+if (rc != SSH_AUTH_SUCCESS) {
+    // error handling
+}
+
+// use the SSH session to execute commands on the remote server, transfer files, etc.
+
+// close the SSH session
+ssh_disconnect(session);
+ssh_free(session);
+
+
+
+
+---
+
+
+
+
+
+
+
+Here are a few things you can try to resolve this issue:
+
+Check that the public key is properly installed on the server: Ensure that the public key is properly installed on the remote server by adding the public key to the authorized_keys file in the remote user's home directory. You can do this manually or by using the ssh-copy-id command.
+
+Check the permissions of the authorized_keys file: The authorized_keys file should have permissions set to 600. You can change the file permissions by running the following command: chmod 600 ~/.ssh/authorized_keys
+
+Check the permissions of the .ssh directory: The .ssh directory on the remote server should have permissions set to 700. You can change the directory permissions by running the following command: chmod 700 ~/.ssh
+
+Use verbose mode: Try running the SCP command with the -v option to enable verbose mode. This will provide more detailed information about the authentication process and may help you identify the issue.
+
+Check the SSH configuration file: Check the SSH configuration file on the client side (typically located at /etc/ssh/ssh_config) and ensure that the option "PubkeyAuthentication" is set to "yes". If the option is set to "no", change it to "yes".
+
+int ssh_publickey_auth(struct ssh *ssh, const char *username, struct sshkey *private_key) {
+    struct sshkey *public_key = NULL;
+    int authenticated = 0;
+
+    if (sshkey_load_public(private_key->filename, &public_key) != 0) {
+        error("Error loading public key %s", private_key->filename);
+        return 0;
+    }
+
+    /* Debugging statement to print out public key */
+    debug("Loaded public key: %s", sshkey_ssh_public_key(public_key, 0));
+
+    if (sshkey_compare(public_key, private_key) != 0) {
+        error("Public key does not match private key %s", private_key->filename);
+        sshkey_free(public_key);
+        return 0;
+    }
+
+    authenticated = ssh_userauth_publickey(ssh, username, public_key);
+    sshkey_free(public_key);
+
+    return authenticated;
+}
+
+
+
